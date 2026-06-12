@@ -58,6 +58,16 @@ def download_file_with_progress(url: str, dest_path: str, dataset_name: str):
         
     add_run_log(dataset_name, f"Base checkpoint successfully saved to {dest_path}")
 
+def get_subprocess_env() -> Dict[str, str]:
+    """Generates the environment variables including the Piper codebase path in PYTHONPATH."""
+    env = os.environ.copy()
+    piper_path = os.path.abspath(os.path.join(os.getcwd(), "piper", "src", "python"))
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{piper_path}{os.pathsep}{env['PYTHONPATH']}"
+    else:
+        env["PYTHONPATH"] = piper_path
+    return env
+
 def run_training_pipeline_thread(
     dataset_name: str,
     base_checkpoint_url: str,
@@ -70,6 +80,17 @@ def run_training_pipeline_thread(
     processed_dir = os.path.join(TRAINING_RUNS_DIR, f"{dataset_name}_processed")
     os.makedirs(TRAINING_RUNS_DIR, exist_ok=True)
     os.makedirs(processed_dir, exist_ok=True)
+    
+    # Check if the piper repository has been cloned in the workspace
+    piper_path = os.path.abspath(os.path.join(os.getcwd(), "piper", "src", "python"))
+    if not os.path.exists(piper_path):
+        add_run_log(
+            dataset_name,
+            "WARNING: './piper' folder not found in workspace. "
+            "Make sure to clone the repository first: "
+            "git clone https://github.com/rhasspy/piper.git ./piper "
+            "and build monotonic_align to run baremetal training."
+        )
     
     try:
         # 1. Preprocessing stage
@@ -91,7 +112,8 @@ def run_training_pipeline_thread(
             preprocess_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            env=get_subprocess_env()
         )
         
         update_run(dataset_name, process=proc)
@@ -150,7 +172,8 @@ def run_training_pipeline_thread(
             train_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            env=get_subprocess_env()
         )
         
         update_run(dataset_name, process=proc)
@@ -338,7 +361,7 @@ def export_onnx_subprocess(
         ]
         
         add_run_log(clean_name, f"Executing export command: {' '.join(export_cmd)}")
-        res = subprocess.run(export_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        res = subprocess.run(export_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=get_subprocess_env())
         
         if res.returncode == 0:
             add_run_log(clean_name, f"ONNX model exported successfully to: {onnx_dest}")

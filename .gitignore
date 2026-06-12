@@ -21,3 +21,7 @@ test_outputs/**/*
 # Downloaded voice models (ignore large binaries, but keep folder structure)
 data/voices/**/*.onnx
 data/voices/**/*.onnx.json
+data/training_datasets/**
+data/training_runs/**
+data/models/**
+
