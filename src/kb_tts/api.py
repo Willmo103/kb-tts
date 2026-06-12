@@ -8,7 +8,8 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from piper import PiperVoice, SynthesisConfig
+from piper import PiperVoice
+from piper.voice import SynthesisConfig
 from pydantic import BaseModel, Field
 import whisper
 
