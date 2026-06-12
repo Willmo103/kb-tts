@@ -132,3 +132,64 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 
 ### `/health` (GET)
 Returns the system status, list of loaded models in memory, and the currently parsed config.
+
+---
+
+## Custom Voice Training & Deployment
+
+This project includes a complete pipeline for training custom Piper voice models using transcribed YouTube audio and deploying them directly back into the API.
+
+### 1. Training Dashboard UI (YouTube Aggregator)
+The dashboard is served directly by the API server at:
+**`http://localhost:8000/training`**
+
+Use this dashboard to:
+- **Aggregate YouTube Audio**: Enter any YouTube link. The background generator downloads the audio, transcribes it using `openai-whisper` (support for `tiny`, `base`, `small`, `medium` models), slices the audio into short sentence segments, and outputs a clean **LJSpeech-formatted dataset** (comprising `wav/` folder and `metadata.csv`).
+- **Monitor Generation Logs**: Live console viewer and progress bar showing downloading, transcription, and segmentation tasks.
+- **Download Datasets**: Download generated datasets as `.zip` files to run training on external compute rigs.
+- **Upload Trained Models**: Directly drag-and-drop your finished `.onnx` and `.onnx.json` model files.
+- **Voice Mapping Registry**: Register new custom voice aliases (e.g. mapping `my_voice` to your uploaded model).
+- **TTS Playground**: Immediately test custom voices and speeds inside the browser.
+
+### 2. GPU-Accelerated Docker Training
+For hardware-rich environments with NVIDIA GPUs, use the training-specific Docker stack to train your model:
+
+1. **Spin up the training container**:
+   ```bash
+   docker compose -f docker-compose.train.yml up -d --build
+   ```
+2. **Preprocess your generated dataset** inside the container:
+   ```bash
+   docker compose -f docker-compose.train.yml exec piper-train python3 -m piper_train.preprocess \
+     --language en_US \
+     --input-dir /datasets/your-dataset-name \
+     --output-dir /training_runs/your-dataset-processed \
+     --dataset-format ljspeech \
+     --sample-rate 22050
+   ```
+3. **Fine-tune matching a pre-trained base model**:
+   - Download a base checkpoint matching your language (from the [Rhasspy checkpoints Hugging Face page](https://huggingface.co/datasets/rhasspy/piper-checkpoints)).
+   - Run the trainer:
+   ```bash
+   docker compose -f docker-compose.train.yml exec piper-train python3 -m piper_train \
+     --dataset-dir /training_runs/your-dataset-processed \
+     --accelerator gpu \
+     --devices 1 \
+     --batch-size 16 \
+     --max_epochs 1000 \
+     --resume_from_checkpoint /training_runs/base-checkpoint.ckpt
+   ```
+4. **Export checkpoints to ONNX**:
+   - Run the export utility:
+   ```bash
+   docker compose -f docker-compose.train.yml exec piper-train python3 -m piper_train.export_onnx \
+     --checkpoint /training_runs/your-dataset-processed/lightning_logs/version_0/checkpoints/epoch=199-step=2000.ckpt \
+     --output-file /training_runs/my_custom_voice.onnx
+   ```
+   - This outputs `my_custom_voice.onnx` and `my_custom_voice.onnx.json`. Upload these using the Model Deployment tab in the Dashboard UI.
+
+### 3. Interactive Jupyter Notebook
+Alternatively, if you pull the repository to run training in a notebook (local Jupyter or Google Colab):
+- Open **[notebooks/train_piper.ipynb](file:///c:/src/kb-tts/notebooks/train_piper.ipynb)**.
+- Follow the interactive steps to install dependencies, aggregate YouTube clips, run the preprocessing script, fine-tune models, and export to ONNX.
+

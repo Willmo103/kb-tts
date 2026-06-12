@@ -13,6 +13,7 @@ from piper.config import SynthesisConfig
 from pydantic import BaseModel, Field
 
 from kb_tts.download import TTS_CONFIG_PATH, VOICES_DIR, download_voice_files, load_config
+from kb_tts.training.api import router as training_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -29,6 +30,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include custom training and deployment routes
+app.include_router(training_router)
 
 # Global voice cache to avoid loading models from disk on every request
 _voices_cache = {}

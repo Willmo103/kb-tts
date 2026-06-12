@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Piper TTS Training Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-glow: rgba(99, 102, 241, 0.35);
+            --secondary: #ec4899;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --sidebar-width: 260px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            display: flex;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.12) 0px, transparent 50%);
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: rgba(10, 15, 30, 0.85);
+            border-right: 1px solid var(--card-border);
+            backdrop-filter: blur(12px);
+            padding: 2.5rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 10;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 3rem;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .logo-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            font-family: 'Space Grotesk', sans-serif;
+            background: linear-gradient(to right, #ffffff, #a5b4fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            list-style: none;
+        }
+
+        .nav-item {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid var(--primary);
+        }
+
+        .nav-item.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-left-color: var(--primary);
+        }
+
+        /* Main Workspace */
+        .workspace {
+            margin-left: var(--sidebar-width);
+            flex-grow: 1;
+            padding: 2.5rem 3.5rem;
+            min-height: 100vh;
+            max-width: 1400px;
+        }
+
+        .header-title {
+            font-size: 2.25rem;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 0.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .header-subtitle {
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            font-size: 1rem;
+        }
+
+        /* Tabs Panels */
+        .tab-panel {
+            display: none;
+            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Glassmorphic Card Styles */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 2rem;
+            backdrop-filter: blur(16px);
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Forms Elements */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        /* Buttons Styling */
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn:disabled {
+            background: #4b5563;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: none;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), #dc2626);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        /* Job Status & Monitoring */
+        .job-item {
+            border-bottom: 1px solid var(--card-border);
+            padding: 1.25rem 0;
+        }
+
+        .job-item:last-child {
+            border-bottom: none;
+        }
+
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .job-title {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .job-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+        }
+
+        .badge-pending { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .badge-downloading { background: rgba(99, 102, 241, 0.15); color: var(--primary); }
+        .badge-processing_audio { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        .badge-transcribing { background: rgba(236, 72, 153, 0.15); color: var(--secondary); }
+        .badge-segmenting { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+        .badge-completed { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .badge-failed { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+        .progress-container {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.4s ease;
+            border-radius: 4px;
+            width: 0%;
+        }
+
+        .job-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Scrolling Log Terminal */
+        .console-log {
+            background: #020617;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            font-family: 'Space Grotesk', monospace;
+            padding: 1rem;
+            font-size: 0.85rem;
+            color: #38bdf8;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .console-log.show {
+            display: block;
+        }
+
+        .log-line {
+            margin-bottom: 0.25rem;
+            white-space: pre-wrap;
+        }
+
+        /* Datasets Grid Layout */
+        .datasets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .dataset-card {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .dataset-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .dataset-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+
+        .dataset-stats {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .dataset-stat-val {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .dataset-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: auto;
+        }
+
+        /* Drag and Drop Uploader */
+        .dropzone {
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 2.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.02);
+            margin-bottom: 1.5rem;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .dropzone-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .dropzone-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Voice Registry Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.95rem;
+        }
+
+        th {
+            padding: 0.75rem 1rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--card-border);
+            font-weight: 600;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Spinner / Loaders */
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #ffffff;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Audio Player Integration */
+        .audio-player-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .audio-player-container.show {
+            display: flex;
+        }
+
+        audio {
+            flex-grow: 1;
+            height: 40px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar navigation -->
+    <div class="sidebar">
+        <div class="logo-container">
+            <div class="logo-icon">P</div>
+            <div class="logo-title">Piper Training</div>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item active" id="nav-generator" onclick="switchTab('generator')">
+                <span>Dataset Creator</span>
+            </li>
+            <li class="nav-item" id="nav-datasets" onclick="switchTab('datasets')">
+                <span>Generated Datasets</span>
+            </li>
+            <li class="nav-item" id="nav-deployment" onclick="switchTab('deployment')">
+                <span>Model Deployment</span>
+            </li>
+            <li class="nav-item" id="nav-playground" onclick="switchTab('playground')">
+                <span>TTS Playground</span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Main Workspace area -->
+    <div class="workspace">
+        
+        <!-- ==================== TABS: DATASET CREATOR ==================== -->
+        <div id="panel-generator" class="tab-panel active">
+            <h1 class="header-title">Create Training Dataset</h1>
+            <p class="header-subtitle">Aggregate voice data by downloading and segmenting audio directly from YouTube.</p>
+            
+            <div class="card">
+                <h2 class="card-title">YouTube Aggregator</h2>
+                <form id="generator-form" onsubmit="startGeneration(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="youtube_url">YouTube Video URL</label>
+                        <input class="form-input" type="url" id="youtube_url" required placeholder="https://www.youtube.com/watch?v=...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="dataset_name">Dataset Name</label>
+                        <input class="form-input" type="text" id="dataset_name" required pattern="^[a-zA-Z0-9_-]+$" placeholder="e.g. my-custom-voice (alphanumeric, dashes/underscores only)">
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label" for="whisper_model_size">Whisper Model Size</label>
+                            <select class="form-select" id="whisper_model_size">
+                                <option value="tiny">Tiny (Fastest, lowest accuracy)</option>
+                                <option value="base" selected>Base (Recommended balance)</option>
+                                <option value="small">Small (Better accuracy, slower)</option>
+                                <option value="medium">Medium (High accuracy, slow)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="language">Audio Language</label>
+                            <select class="form-select" id="language">
+                                <option value="en_US">English (en_US)</option>
+                                <option value="de_DE">German (de_DE)</option>
+                                <option value="es_ES">Spanish (es_ES)</option>
+                                <option value="fr_FR">French (fr_FR)</option>
+                                <option value="it_IT">Italian (it_IT)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button class="btn" type="submit" id="btn-submit-generator">
+                        <span>Generate Dataset</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Generation Jobs Monitor -->
+            <div class="card" id="jobs-card" style="display: none;">
+                <h2 class="card-title">Active Dataset Generation Jobs</h2>
+                <div id="jobs-list">
+                    <!-- Jobs injected here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TABS: GENERATED DATASETS ==================== -->
+        <div id="panel-datasets" class="tab-panel">
+            <h1 class="header-title">Generated Datasets</h1>
+            <p class="header-subtitle">Manage speech transcription datasets formatted for custom Piper TTS training.</p>
+            
+            <div class="card">
+                <h2 class="card-title">Completed LJSpeech Datasets</h2>
+                <div class="datasets-grid" id="datasets-container">
+                    <p style="color: var(--text-muted);">No datasets generated yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TABS: MODEL DEPLOYMENT ==================== -->
+        <div id="panel-deployment" class="tab-panel">
+            <h1 class="header-title">Model Deployment Registry</h1>
+            <p class="header-subtitle">Deploy custom models from your training process directly into the synthesis pipeline.</p>
+            
+            <div class="card">
+                <h2 class="card-title">Upload Custom Model</h2>
+                <div class="dropzone" id="upload-dropzone" onclick="triggerFileInput()">
+                    <div class="dropzone-title">Drag & Drop model files here</div>
+                    <div class="dropzone-desc">Select both your trained <span style="color: var(--primary);">.onnx</span> model file and its <span style="color: var(--secondary);">.onnx.json</span> config file.</div>
+                    <input type="file" id="model-file-input" multiple style="display: none;" onchange="handleFileSelect(event)">
+                </div>
+                
+                <div id="upload-files-info" style="display: none; margin-bottom: 1rem;">
+                    <p style="font-weight: 500;">Files ready to upload:</p>
+                    <div style="font-size: 0.9rem; color: var(--text-muted); margin: 0.5rem 0;" id="file-list-names"></div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="custom_model_name">Model Name Override (Optional)</label>
+                        <input class="form-input" type="text" id="custom_model_name" placeholder="e.g. en_US-speaker-medium">
+                    </div>
+                    
+                    <button class="btn" onclick="startModelUpload()" id="btn-upload-model">
+                        <span>Upload Custom Model</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearUploadSelection()">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Deployed custom models list -->
+            <div class="card">
+                <h2 class="card-title">Trained Models Registry</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Model Name</th>
+                                <th>Size</th>
+                                <th>Config</th>
+                                <th>Voice Mappings</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="models-table-body">
+                            <!-- Custom models injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Mappings Creator modal/card -->
+            <div class="card">
+                <h2 class="card-title">Create Voice Alias Mapping</h2>
+                <form id="mapping-form" onsubmit="createVoiceMapping(event)">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group">
+                            <label class="form-label" for="mapping_voice_name">Voice Alias Key (e.g. alloy)</label>
+                            <input class="form-input" type="text" id="mapping_voice_name" required placeholder="e.g. custom_alloy">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="mapping_model_select">Trained Model</label>
+                            <select class="form-select" id="mapping_model_select">
+                                <option value="">Loading models...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; gap: 0.75rem; align-items: center;">
+                            <div style="flex-grow: 1;">
+                                <label class="form-label" for="mapping_speaker_id">Speaker ID</label>
+                                <input class="form-input" type="number" id="mapping_speaker_id" value="0" min="0">
+                            </div>
+                            <button class="btn" type="submit" style="margin-top: 1.25rem;">Map Alias</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ==================== TABS: TTS PLAYGROUND ==================== -->
+        <div id="panel-playground" class="tab-panel">
+            <h1 class="header-title">Speech Synthesizer Playground</h1>
+            <p class="header-subtitle">Test custom voice models and mappings immediately inside the browser.</p>
+            
+            <div class="card">
+                <h2 class="card-title">Synthesize Speech</h2>
+                <form id="tts-form" onsubmit="synthesizeSpeech(event)">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label" for="tts_voice">Select Voice / Model</label>
+                            <select class="form-select" id="tts_voice">
+                                <option value="alloy">alloy (Mapped default)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="tts_format">Format</label>
+                            <select class="form-select" id="tts_format">
+                                <option value="mp3">MP3</option>
+                                <option value="wav">WAV</option>
+                                <option value="ogg">Ogg</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="tts_speed">Speed</label>
+                            <input class="form-input" type="number" id="tts_speed" value="1.0" min="0.25" max="4.0" step="0.05">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="tts_input">Text Prompt</label>
+                        <textarea class="form-input" id="tts_input" rows="4" style="resize: vertical;" required placeholder="Type something for the Custom Piper voice model to say..."></textarea>
+                    </div>
+                    
+                    <button class="btn" type="submit" id="btn-synthesize">
+                        <span>Synthesize Audio</span>
+                    </button>
+                </form>
+                
+                <div class="audio-player-container" id="audio-output-container">
+                    <span style="font-weight: 500;">Output:</span>
+                    <audio id="audio-player" controls></audio>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripting for UI -->
+    <script>
+        // Tab switching logic
+        function switchTab(tabName) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`nav-${tabName}`).classList.add('active');
+            document.getElementById(`panel-${tabName}`).classList.add('active');
+
+            if (tabName === 'datasets') {
+                loadDatasets();
+            } else if (tabName === 'deployment') {
+                loadModels();
+            } else if (tabName === 'playground') {
+                loadPlaygroundVoices();
+            }
+        }
+
+        // ==================== DATA GENERATOR SECTION ====================
+        let activeJobsPoll = null;
+
+        function startGeneration(e) {
+            e.preventDefault();
+            const youtubeUrl = document.getElementById('youtube_url').value;
+            const datasetName = document.getElementById('dataset_name').value;
+            const whisperModelSize = document.getElementById('whisper_model_size').value;
+            const language = document.getElementById('language').value;
+            const btnSubmit = document.getElementById('btn-submit-generator');
+            
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = `<span class="spinner"></span> <span>Starting Job...</span>`;
+
+            fetch('/api/training/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    youtube_url: youtubeUrl,
+                    dataset_name: datasetName,
+                    whisper_model_size: whisperModelSize,
+                    language: language
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Failed to start job') });
+                return res.json();
+            })
+            .then(data => {
+                document.getElementById('jobs-card').style.display = 'block';
+                startJobsPolling();
+                document.getElementById('youtube_url').value = '';
+                document.getElementById('dataset_name').value = '';
+            })
+            .catch(err => {
+                alert(`Error starting generation: ${err.message}`);
+            })
+            .finally(() => {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = `<span>Generate Dataset</span>`;
+            });
+        }
+
+        function startJobsPolling() {
+            if (activeJobsPoll) clearInterval(activeJobsPoll);
+            pollJobs();
+            activeJobsPoll = setInterval(pollJobs, 2000);
+        }
+
+        function pollJobs() {
+            fetch('/api/training/jobs')
+            .then(res => res.json())
+            .then(jobs => {
+                const container = document.getElementById('jobs-list');
+                if (jobs.length === 0) {
+                    container.innerHTML = `<p style="color: var(--text-muted);">No active dataset jobs running.</p>`;
+                    clearInterval(activeJobsPoll);
+                    activeJobsPoll = null;
+                    return;
+                }
+                
+                let html = '';
+                let hasActive = false;
+                
+                jobs.forEach(job => {
+                    if (['pending', 'downloading', 'processing_audio', 'transcribing', 'segmenting'].includes(job.status)) {
+                        hasActive = true;
+                    }
+                    
+                    const logsVisible = document.getElementById(`logs-${job.id}`)?.classList.contains('show') ? 'show' : '';
+                    
+                    html += `
+                        <div class="job-item">
+                            <div class="job-header">
+                                <span class="job-title">${job.dataset_name}</span>
+                                <span class="job-badge badge-${job.status}">${job.status}</span>
+                            </div>
+                            <div class="progress-container">
+                                <div class="progress-bar" style="width: ${job.progress}%"></div>
+                            </div>
+                            <div class="job-meta">
+                                <span>Progress: ${job.progress}%</span>
+                                <span>${job.num_segments} segments generated</span>
+                            </div>
+                            
+                            <button class="btn btn-secondary" style="margin-top: 0.75rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="toggleLogs('${job.id}')">
+                                View Logs Console
+                            </button>
+                            
+                            <div class="console-log ${logsVisible}" id="logs-${job.id}">
+                                ${job.logs.map(line => `<div class="log-line">${line}</div>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+                
+                if (!hasActive && activeJobsPoll) {
+                    clearInterval(activeJobsPoll);
+                    activeJobsPoll = null;
+                }
+            })
+            .catch(err => console.error("Failed to fetch jobs:", err));
+        }
+
+        function toggleLogs(jobId) {
+            const el = document.getElementById(`logs-${jobId}`);
+            if (el.classList.contains('show')) {
+                el.classList.remove('show');
+            } else {
+                el.classList.add('show');
+                el.scrollTop = el.scrollHeight;
+            }
+        }
+
+        // ==================== DATASETS TABS ====================
+        function loadDatasets() {
+            const container = document.getElementById('datasets-container');
+            container.innerHTML = `<p style="color: var(--text-muted);"><span class="spinner"></span> Loading datasets...</p>`;
+            
+            fetch('/api/training/datasets')
+            .then(res => res.json())
+            .then(datasets => {
+                if (datasets.length === 0) {
+                    container.innerHTML = `<p style="color: var(--text-muted);">No datasets generated on disk yet.</p>`;
+                    return;
+                }
+                
+                let html = '';
+                datasets.forEach(d => {
+                    html += `
+                        <div class="dataset-card">
+                            <div class="dataset-header">
+                                <span>📦 ${d.name}</span>
+                            </div>
+                            <div class="dataset-stats">
+                                <div>Total Audio Files: <span class="dataset-stat-val">${d.num_samples}</span></div>
+                            </div>
+                            <div class="dataset-actions">
+                                <a href="/api/training/datasets/${d.name}/download" class="btn" style="text-decoration: none;">
+                                    Download ZIP
+                                </a>
+                                <button class="btn btn-danger btn-secondary" onclick="deleteDataset('${d.name}')">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            })
+            .catch(err => {
+                container.innerHTML = `<p style="color: var(--danger);">Failed to load datasets: ${err.message}</p>`;
+            });
+        }
+
+        function deleteDataset(name) {
+            if (!confirm(`Are you sure you want to delete dataset "${name}"?`)) return;
+            
+            fetch(`/api/training/datasets/${name}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                loadDatasets();
+            })
+            .catch(err => alert("Failed to delete dataset: " + err.message));
+        }
+
+        // ==================== MODEL REGISTRY & DEPLOYMENT ====================
+        let selectedFiles = [];
+
+        function triggerFileInput() {
+            document.getElementById('model-file-input').click();
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            selectedFiles = files;
+            
+            const dropzone = document.getElementById('upload-dropzone');
+            const fileList = document.getElementById('file-list-names');
+            const uploadInfo = document.getElementById('upload-files-info');
+            
+            if (files.length > 0) {
+                fileList.innerHTML = files.map(f => `<div>📄 ${f.name} (${(f.size/1024/1024).toFixed(2)} MB)</div>`).join('');
+                uploadInfo.style.display = 'block';
+                dropzone.style.display = 'none';
+            }
+        }
+
+        function clearUploadSelection() {
+            selectedFiles = [];
+            document.getElementById('model-file-input').value = '';
+            document.getElementById('upload-files-info').style.display = 'none';
+            document.getElementById('upload-dropzone').style.display = 'block';
+            document.getElementById('custom_model_name').value = '';
+        }
+
+        function startModelUpload() {
+            const onnxFile = selectedFiles.find(f => f.name.endsWith('.onnx'));
+            const jsonFile = selectedFiles.find(f => f.name.endsWith('.json'));
+            const modelNameOverride = document.getElementById('custom_model_name').value;
+            
+            if (!onnxFile || !jsonFile) {
+                alert("Please select both a .onnx model file and a .onnx.json config file.");
+                return;
+            }
+            
+            const btnUpload = document.getElementById('btn-upload-model');
+            btnUpload.disabled = true;
+            btnUpload.innerHTML = `<span class="spinner"></span> <span>Uploading files...</span>`;
+            
+            const formData = new FormData();
+            formData.append('model_file', onnxFile);
+            formData.append('config_file', jsonFile);
+            if (modelNameOverride) {
+                formData.append('model_name', modelNameOverride);
+            }
+            
+            fetch('/api/training/voices/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Upload failed') });
+                return res.json();
+            })
+            .then(data => {
+                alert(`Successfully uploaded model: ${data.model_name}`);
+                clearUploadSelection();
+                loadModels();
+            })
+            .catch(err => {
+                alert(`Upload failed: ${err.message}`);
+            })
+            .finally(() => {
+                btnUpload.disabled = false;
+                btnUpload.innerHTML = `<span>Upload Custom Model</span>`;
+            });
+        }
+
+        function loadModels() {
+            const tbody = document.getElementById('models-table-body');
+            const selectModel = document.getElementById('mapping_model_select');
+            
+            tbody.innerHTML = `<tr><td colspan="5" style="color: var(--text-muted);"><span class="spinner"></span> Loading models...</td></tr>`;
+            
+            fetch('/api/training/voices')
+            .then(res => res.json())
+            .then(models => {
+                if (models.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="color: var(--text-muted);">No custom voice models registered yet.</td></tr>`;
+                    selectModel.innerHTML = `<option value="">Upload a model first</option>`;
+                    return;
+                }
+                
+                let tableHtml = '';
+                let selectHtml = '<option value="">-- Choose Deployed Model --</option>';
+                
+                models.forEach(m => {
+                    const sizeMb = (m.size_bytes / 1024 / 1024).toFixed(1);
+                    const mappingsText = m.mappings.map(map => `<span style="background: rgba(99, 102, 241, 0.2); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; margin-right: 0.3rem;">${map.alias} (ID: ${map.speaker_id})</span>`).join('') || '<span style="color: var(--text-muted);">None</span>';
+                    
+                    tableHtml += `
+                        <tr>
+                            <td style="font-weight: 600;">${m.model_name}</td>
+                            <td>${sizeMb} MB</td>
+                            <td><span style="color: ${m.has_config ? 'var(--success)' : 'var(--danger)'}">${m.has_config ? 'Ready' : 'Missing config'}</span></td>
+                            <td>${mappingsText}</td>
+                            <td>
+                                <button class="btn btn-danger btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="deleteVoice('${m.model_name}')">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    
+                    selectHtml += `<option value="${m.model_name}">${m.model_name}</option>`;
+                });
+                
+                tbody.innerHTML = tableHtml;
+                selectModel.innerHTML = selectHtml;
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="5" style="color: var(--danger);">Failed to load registry: ${err.message}</td></tr>`;
+            });
+        }
+
+        function deleteVoice(modelName) {
+            if (!confirm(`Are you sure you want to remove model "${modelName}" and all associated config mappings?`)) return;
+            
+            fetch(`/api/training/voices/${modelName}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                loadModels();
+            })
+            .catch(err => alert("Deletion failed: " + err.message));
+        }
+
+        function createVoiceMapping(e) {
+            e.preventDefault();
+            const voiceName = document.getElementById('mapping_voice_name').value;
+            const modelName = document.getElementById('mapping_model_select').value;
+            const speakerId = parseInt(document.getElementById('mapping_speaker_id').value, 10);
+            
+            if (!modelName) {
+                alert("Please select a model to map.");
+                return;
+            }
+            
+            fetch('/api/training/voices/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    voice_name: voiceName,
+                    model_name: modelName,
+                    speaker_id: speakerId
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Mapping failed') });
+                return res.json();
+            })
+            .then(data => {
+                alert(`Successfully mapped voice alias "${voiceName}" to model "${modelName}".`);
+                document.getElementById('mapping_voice_name').value = '';
+                loadModels();
+            })
+            .catch(err => alert("Mapping registration failed: " + err.message));
+        }
+
+        // ==================== TTS PLAYGROUND SECTION ====================
+        function loadPlaygroundVoices() {
+            const select = document.getElementById('tts_voice');
+            select.innerHTML = '<option value="">Loading voices list...</option>';
+            
+            // Fetch configuration details from /health health status
+            fetch('/health')
+            .then(res => res.json())
+            .then(data => {
+                const config = data.config;
+                const voiceMap = config.voice_map || {};
+                
+                let html = '';
+                // Add voice map aliases
+                Object.keys(voiceMap).forEach(key => {
+                    const model = voiceMap[key].model;
+                    const spk = voiceMap[key].speaker_id;
+                    html += `<option value="${key}">${key} (alias -> ${model}:${spk})</option>`;
+                });
+                
+                // Add any loaded/raw models from voices registry
+                fetch('/api/training/voices')
+                .then(res => res.json())
+                .then(customModels => {
+                    customModels.forEach(m => {
+                        // Avoid duplicates if already in map, but allow direct model targeting
+                        html += `<option value="${m.model_name}:0">${m.model_name} (direct model file, Speaker 0)</option>`;
+                    });
+                    select.innerHTML = html;
+                })
+                .catch(err => {
+                    select.innerHTML = html; // fallback to aliases only
+                });
+            })
+            .catch(err => {
+                select.innerHTML = '<option value="">Failed to load list. Server down?</option>';
+            });
+        }
+
+        function synthesizeSpeech(e) {
+            e.preventDefault();
+            const voice = document.getElementById('tts_voice').value;
+            const responseFormat = document.getElementById('tts_format').value;
+            const speed = parseFloat(document.getElementById('tts_speed').value);
+            const input = document.getElementById('tts_input').value;
+            
+            const btn = document.getElementById('btn-synthesize');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner"></span> <span>Synthesizing...</span>`;
+            
+            fetch('/v1/audio/speech', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    input: input,
+                    voice: voice,
+                    response_format: responseFormat,
+                    speed: speed
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Synthesis failed') });
+                return res.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const player = document.getElementById('audio-player');
+                const container = document.getElementById('audio-output-container');
+                
+                player.src = url;
+                container.classList.add('show');
+                player.play();
+            })
+            .catch(err => alert("TTS Synthesis failed: " + err.message))
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = `<span>Synthesize Audio</span>`;
+            });
+        }
+
+        // Drag and Drop styling helpers
+        const dropzone = document.getElementById('upload-dropzone');
+        if (dropzone) {
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    dropzone.classList.add('dragover');
+                }, false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    dropzone.classList.remove('dragover');
+                }, false);
+            });
+            dropzone.addEventListener('drop', e => {
+                const dt = e.dataTransfer;
+                const files = Array.from(dt.files);
+                selectedFiles = files;
+                
+                const fileList = document.getElementById('file-list-names');
+                const uploadInfo = document.getElementById('upload-files-info');
+                
+                if (files.length > 0) {
+                    fileList.innerHTML = files.map(f => `<div>📄 ${f.name} (${(f.size/1024/1024).toFixed(2)} MB)</div>`).join('');
+                    uploadInfo.style.display = 'block';
+                    dropzone.style.display = 'none';
+                }
+            });
+        }
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if any jobs are currently active to resume polling
+            fetch('/api/training/jobs')
+            .then(res => res.json())
+            .then(jobs => {
+                if (jobs.length > 0) {
+                    document.getElementById('jobs-card').style.display = 'block';
+                    startJobsPolling();
+                }
+            })
+            .catch(err => console.error(err));
+        });
+    </script>
+</body>
+</html>
