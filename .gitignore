@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Lint and formatting tool caches
+.ruff_cache/
+.pyright_cache/
+
+# Test audio outputs (ignore generated files, but keep folder)
+test_outputs/**/*
+!test_outputs/
+!test_outputs/.gitkeep
+
+# Downloaded voice models (ignore large binaries, but keep folder structure)
+data/voices/**/*.onnx
+data/voices/**/*.onnx.json

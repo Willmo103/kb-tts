@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  kb-tts:
+    build: .
+    container_name: kb-tts
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/voices:/data/voices
+      - ./voices_config.json:/app/voices_config.json
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - VOICES_DIR=/data/voices
+      - TTS_CONFIG_PATH=/app/voices_config.json
+    restart: unless-stopped

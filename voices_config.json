@@ -1,0 +1,29 @@
+{
+  "default_model": "en_US-libritts-high",
+  "voice_map": {
+    "alloy": {
+      "model": "en_US-libritts-high",
+      "speaker_id": 0
+    },
+    "echo": {
+      "model": "en_US-libritts-high",
+      "speaker_id": 1
+    },
+    "fable": {
+      "model": "en_US-libritts-high",
+      "speaker_id": 2
+    },
+    "onyx": {
+      "model": "en_US-libritts-high",
+      "speaker_id": 3
+    },
+    "nova": {
+      "model": "en_US-libritts-high",
+      "speaker_id": 4
+    },
+    "shimmer": {
+      "model": "en_US-libritts-high",
+      "speaker_id": 5
+    }
+  }
+}
