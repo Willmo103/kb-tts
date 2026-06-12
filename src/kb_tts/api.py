@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -11,7 +12,7 @@ from piper import PiperVoice
 from piper.config import SynthesisConfig
 from pydantic import BaseModel, Field
 
-from kb_tts.download import CONFIG, TTS_CONFIG_PATH, VOICES_DIR, download_voice_files
+from kb_tts.download import TTS_CONFIG_PATH, VOICES_DIR, download_voice_files, load_config
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -44,10 +45,60 @@ CONTENT_TYPES = {
 }
 
 
+def clean_markdown_text(text: str, strip_code_blocks: bool = False) -> str:
+    """
+    Strips Markdown formatting from the text so that Text-to-Speech engines
+    do not read formatting characters (like asterisks, backticks, or links) aloud.
+    """
+    if not text:
+        return text
+
+    # 1. Handle code blocks
+    if strip_code_blocks:
+        # Remove triple backtick code blocks including content
+        text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    else:
+        # Keep content, just strip triple backticks and optional language specifiers
+        text = re.sub(r"```[a-zA-Z0-9+#-]*\n?(.*?)\n?```", r"\1", text, flags=re.DOTALL)
+
+    # 2. Inline code backticks: `code` -> code
+    text = re.sub(r"`([^`\n]+)`", r"\1", text)
+
+    # 3. Images: ![alt](url) -> alt
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+
+    # 4. Links: [text](url) -> text
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+
+    # 5. Headers: ### Title -> Title
+    text = re.sub(r"^[ \t]*#+[ \t]+", "", text, flags=re.MULTILINE)
+
+    # 6. Bold / Italics / Strikethrough
+    # Bold: **text** or __text__ -> text
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"__([^_]+)__", r"\1", text)
+    # Italics: *text* or _text_ -> text
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
+    text = re.sub(r"_([^_]+)_", r"\1", text)
+    # Strikethrough: ~~text~~ -> text
+    text = re.sub(r"~~([^~]+)~~", r"\1", text)
+
+    # 7. Blockquotes: > quote -> quote
+    text = re.sub(r"^[ \t]*>[ \t]+", "", text, flags=re.MULTILINE)
+
+    # 8. List items:
+    # Bullet points (e.g. - item, * item) -> replace with item
+    text = re.sub(r"^[ \t]*[-*+][ \t]+", "", text, flags=re.MULTILINE)
+
+    # Clean up multiple newlines (3 or more) to max 2 newlines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 class SpeechRequest(BaseModel):
     model: str = Field(
         default="tts-1",
-        description="Model name. Ignored as Piper is used under the hood.",
+        description="Model name. Specifying a custom Piper model overrides the default model.",
     )
     input: str = Field(
         ..., max_length=4096, description="The text to generate audio for."
@@ -62,6 +113,14 @@ class SpeechRequest(BaseModel):
     )
     speed: float = Field(
         default=1.0, ge=0.25, le=4.0, description="Speed multiplier for speech rate."
+    )
+    clean_markdown: Optional[bool] = Field(
+        default=None,
+        description="Whether to clean markdown from the input text before synthesis. If not specified, the server default is used.",
+    )
+    strip_code_blocks: Optional[bool] = Field(
+        default=None,
+        description="Whether to completely remove markdown code blocks. If not specified, the server default is used.",
     )
 
 
@@ -88,22 +147,33 @@ def get_loaded_voice(model_name: str) -> PiperVoice:
         )
 
 
-def resolve_voice_params(voice_input: str) -> tuple[str, Optional[int]]:
+def resolve_voice_params(voice_input: str, request_model: str = "tts-1") -> tuple[str, Optional[int]]:
     """
-    Resolve model_name and speaker_id based on voice_input.
+    Resolve model_name and speaker_id based on voice_input and request_model.
     Handles:
     - Standard keys ('alloy', 'echo', etc.)
     - Pure speaker ID numbers ('123') -> uses default_model and speaker_id 123
     - Colon-separated values ('en_US-libritts-high:123') -> uses custom model and speaker_id 123
     - Pure model names ('en_US-amy-medium') -> uses model and speaker_id None
     """
-    voice_map = CONFIG.get("voice_map", {})
-    default_model = CONFIG.get("default_model", "en_US-libritts-high")
+    config = load_config()
+    voice_map = config.get("voice_map", {})
+
+    # If a custom model is specified in the API request, use that as the default model
+    if request_model and request_model not in ("tts-1", "tts-1-hd"):
+        default_model = request_model
+    else:
+        default_model = config.get("default_model", "en_US-libritts-high")
 
     # 1. Check if it matches a mapped name in the JSON configuration
     if voice_input in voice_map:
         mapping = voice_map[voice_input]
-        return mapping.get("model", default_model), mapping.get("speaker_id")
+        # If the user requested a custom model, we should use that custom model instead of the voice mapping's model,
+        # but keep the voice mapping's speaker_id.
+        model_name = default_model
+        if request_model in ("tts-1", "tts-1-hd", None):
+            model_name = mapping.get("model", default_model)
+        return model_name, mapping.get("speaker_id")
 
     # 2. Check if it is a pure numeric speaker ID
     if voice_input.isdigit():
@@ -245,7 +315,7 @@ def health():
         "loaded_models": list(_voices_cache.keys()),
         "voices_dir": VOICES_DIR,
         "config_path": TTS_CONFIG_PATH,
-        "config": CONFIG,
+        "config": load_config(),
     }
 
 
@@ -260,7 +330,7 @@ def generate_speech(request: SpeechRequest):
         )
 
     # Resolve the model and speaker
-    model_name, speaker_id = resolve_voice_params(request.voice)
+    model_name, speaker_id = resolve_voice_params(request.voice, request.model)
 
     # Fetch/Load the voice
     voice = get_loaded_voice(model_name)
@@ -278,13 +348,22 @@ def generate_speech(request: SpeechRequest):
     length_scale = 1.0 / request.speed if request.speed > 0 else 1.0
     syn_config = SynthesisConfig(speaker_id=speaker_id, length_scale=length_scale)
 
+    # Determine markdown cleaning config
+    config = load_config()
+    do_clean = request.clean_markdown if request.clean_markdown is not None else config.get("clean_markdown", True)
+    do_strip = request.strip_code_blocks if request.strip_code_blocks is not None else config.get("strip_code_blocks", False)
+
+    input_text = request.input
+    if do_clean:
+        input_text = clean_markdown_text(input_text, strip_code_blocks=do_strip)
+
     # Synthesize to a temporary WAV file
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
         temp_wav_path = temp_wav.name
 
     try:
         with wave.open(temp_wav_path, "wb") as wav_file:
-            voice.synthesize_wav(request.input, wav_file, syn_config=syn_config)
+            voice.synthesize_wav(input_text, wav_file, syn_config=syn_config)
 
         # Convert WAV to output format
         audio_data = convert_audio(temp_wav_path, response_format)

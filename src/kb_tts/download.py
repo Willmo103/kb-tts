@@ -14,6 +14,8 @@ def load_config():
     if not os.path.exists(TTS_CONFIG_PATH):
         default_config = {
             "default_model": "en_US-libritts-high",
+            "clean_markdown": True,
+            "strip_code_blocks": False,
             "voice_map": {
                 "alloy": {"model": "en_US-libritts-high", "speaker_id": 0},
                 "echo": {"model": "en_US-libritts-high", "speaker_id": 1},
