@@ -9,6 +9,8 @@ services:
     volumes:
       - ./data/voices:/data/voices
       - ./voices_config.json:/app/voices_config.json
+      - ./data/training_datasets:/app/data/training_datasets
+      - ./data/training_runs:/app/data/training_runs
     environment:
       - HOST=0.0.0.0
       - PORT=8000

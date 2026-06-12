@@ -6,11 +6,12 @@ import tempfile
 import wave
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from piper import PiperVoice
 from piper.config import SynthesisConfig
 from pydantic import BaseModel, Field
+import whisper
 
 from kb_tts.download import TTS_CONFIG_PATH, VOICES_DIR, download_voice_files, load_config
 from kb_tts.training.api import router as training_router
@@ -36,6 +37,9 @@ app.include_router(training_router)
 
 # Global voice cache to avoid loading models from disk on every request
 _voices_cache = {}
+
+# Global whisper cache to avoid loading Whisper models from disk on every request
+_whisper_cache = {}
 
 # Supported response audio formats and their Content-Types
 CONTENT_TYPES = {
@@ -323,7 +327,7 @@ def health():
     }
 
 
-@app.post("/v1/audio/speech")
+@app.post("/audio/speech")
 def generate_speech(request: SpeechRequest):
     """OpenAI compliant Speech synthesis endpoint."""
     response_format = request.response_format.lower()
@@ -377,3 +381,96 @@ def generate_speech(request: SpeechRequest):
     finally:
         if os.path.exists(temp_wav_path):
             os.remove(temp_wav_path)
+
+
+def format_timestamp(seconds: float, is_vtt: bool = False) -> str:
+    millis = int((seconds - int(seconds)) * 1000)
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    
+    sep = "." if is_vtt else ","
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}{sep}{millis:03d}"
+
+
+def format_whisper_segments(segments: list, format_type: str) -> str:
+    is_vtt = format_type == "vtt"
+    output = []
+    if is_vtt:
+        output.append("WEBVTT\n")
+        
+    for i, seg in enumerate(segments):
+        start = seg.get("start", 0.0)
+        end = seg.get("end", 0.0)
+        text = seg.get("text", "").strip()
+        
+        start_str = format_timestamp(start, is_vtt)
+        end_str = format_timestamp(end, is_vtt)
+        
+        if is_vtt:
+            output.append(f"\n{start_str} --> {end_str}\n{text}\n")
+        else:
+            output.append(f"\n{i+1}\n{start_str} --> {end_str}\n{text}\n")
+            
+    return "".join(output)
+
+
+@app.post("/audio/transcriptions")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    model: str = Form("whisper-1"),
+    language: Optional[str] = Form(None),
+    prompt: Optional[str] = Form(None),
+    response_format: str = Form("json"),
+    temperature: float = Form(0.0)
+):
+    """OpenAI compliant audio transcription endpoint using local Whisper."""
+    whisper_model = "base"
+    if model and model != "whisper-1":
+        if model in ["tiny", "base", "small", "medium", "large"]:
+            whisper_model = model
+
+    suffix = os.path.splitext(file.filename)[1] or ".wav"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_audio:
+        temp_audio.write(await file.read())
+        temp_audio_path = temp_audio.name
+
+    try:
+        if whisper_model not in _whisper_cache:
+            print(f"Loading Whisper model weights: {whisper_model}")
+            _whisper_cache[whisper_model] = whisper.load_model(whisper_model)
+            
+        model_instance = _whisper_cache[whisper_model]
+        
+        options = {}
+        if language:
+            options["language"] = language
+        if temperature:
+            options["temperature"] = temperature
+            
+        result = model_instance.transcribe(temp_audio_path, **options)
+        text = result.get("text", "").strip()
+        
+        fmt = response_format.lower()
+        if fmt == "json" or not fmt:
+            return {"text": text}
+        elif fmt == "text":
+            return Response(content=text, media_type="text/plain")
+        elif fmt in ["srt", "vtt"]:
+            formatted = format_whisper_segments(result.get("segments", []), fmt)
+            media_type = "text/vtt" if fmt == "vtt" else "text/srt"
+            return Response(content=formatted, media_type=media_type)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported response_format '{response_format}'. Supported formats are: json, text, srt, vtt"
+            )
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Whisper transcription failed: {str(e)}"
+        )
+    finally:
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)

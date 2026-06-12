@@ -13,7 +13,8 @@ dependencies = [
     "piper-tts>=1.2.0",
     "requests>=2.31.0",
     "yt-dlp>=2024.3.10",
-    "openai-whisper>=20231117"
+    "openai-whisper>=20231117",
+    "python-multipart>=0.0.32",
 ]
 
 [project.scripts]

@@ -113,12 +113,12 @@ When calling the API's `voice` parameter, the server supports:
 
 ## API Documentation
 
-### `/v1/audio/speech` (POST)
+### `/audio/speech` (POST)
 Synthesizes the input text into audio.
 
 **Example Request (curl)**:
 ```bash
-curl -X POST http://localhost:8000/v1/audio/speech \
+curl -X POST http://localhost:8000/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "model": "tts-1",
@@ -129,6 +129,20 @@ curl -X POST http://localhost:8000/v1/audio/speech \
   }' \
   --output output.mp3
 ```
+
+### `/audio/transcriptions` (POST)
+OpenAI-compliant speech-to-text transcription endpoint using local Whisper.
+
+**Example Request (curl)**:
+```bash
+curl -X POST http://localhost:8000/audio/transcriptions \
+  -F "file=@test.wav" \
+  -F "model=base" \
+  -F "response_format=json" \
+  -o transcription.json
+```
+
+Supported `response_format` types: `json`, `text`, `srt`, `vtt`.
 
 ### `/health` (GET)
 Returns the system status, list of loaded models in memory, and the currently parsed config.
@@ -149,6 +163,7 @@ Use this dashboard to:
 - **Download Datasets**: Download generated datasets as `.zip` files to run training on external compute rigs.
 - **Upload Trained Models**: Directly drag-and-drop your finished `.onnx` and `.onnx.json` model files.
 - **Voice Mapping Registry**: Register new custom voice aliases (e.g. mapping `my_voice` to your uploaded model).
+- **Training Center (Baremetal)**: Initiate, monitor, and stop training/fine-tuning runs directly on your AI server. You can select datasets, choose/download pre-trained base checkpoints, adjust epochs and batch sizes, monitor logs in real time, and export checkpoints directly to ONNX.
 - **TTS Playground**: Immediately test custom voices and speeds inside the browser.
 
 ### 2. GPU-Accelerated Docker Training

@@ -1,11 +1,10 @@
-import os
-import requests
+from fastapi.testclient import TestClient
+from kb_tts.api import app
 
-BASE_URL = "http://localhost:8000"
+client = TestClient(app)
 
 def test_markdown_cleaning_api():
-    print("Testing /v1/audio/speech with markdown cleaning...")
-    
+    """Verify speech synthesis with markdown cleaning options using the TestClient."""
     # 1. Clean markdown (default or explicit)
     payload = {
         "model": "tts-1",
@@ -14,31 +13,47 @@ def test_markdown_cleaning_api():
         "response_format": "mp3",
         "clean_markdown": True
     }
-    r = requests.post(f"{BASE_URL}/v1/audio/speech", json=payload)
+    r = client.post("/audio/speech", json=payload)
     assert r.status_code == 200, f"Failed with {r.text}"
-    print(f"Clean markdown request successful. Audio size: {len(r.content)} bytes")
+    assert len(r.content) > 0, "Returned empty audio"
 
     # 2. Raw markdown (no cleaning)
     payload["clean_markdown"] = False
-    r_raw = requests.post(f"{BASE_URL}/v1/audio/speech", json=payload)
+    r_raw = client.post("/audio/speech", json=payload)
     assert r_raw.status_code == 200, f"Failed with {r_raw.text}"
-    print(f"Raw markdown request successful. Audio size: {len(r_raw.content)} bytes")
+    assert len(r_raw.content) > 0, "Returned empty audio"
 
-def test_custom_model_override_api():
-    print("Testing custom model override...")
+def test_custom_model_override_api(monkeypatch):
+    """Verify custom model resolution overrides using the TestClient."""
+    # Mock download_voice_files to avoid downloading weights during testing
+    import kb_tts.api
+    monkeypatch.setattr(
+        kb_tts.api, 
+        "download_voice_files", 
+        lambda model_name: ("data/voices/en_US-libritts-high.onnx", "data/voices/en_US-libritts-high.onnx.json")
+    )
+    # Mock PiperVoice.load to avoid loading runtime ONNX weights
+    from piper import PiperVoice
+    class DummyConfig:
+        num_speakers = 100
+    class DummyVoice:
+        config = DummyConfig()
+        def synthesize_wav(self, text, wav_file, syn_config=None):
+            # Write dummy wav frames directly to the Wave_write object
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(22050)
+            wav_file.writeframes(b'\x00' * 100)
     
+    monkeypatch.setattr(PiperVoice, "load", lambda *args, **kwargs: DummyVoice())
+
     # Use restored LibriTTS model for alloy
     payload = {
         "model": "en_US-libritts_r-medium",
         "input": "Testing dynamic loading of LibriTTS restored voice.",
         "voice": "alloy",
-        "response_format": "mp3"
+        "response_format": "wav"
     }
-    r = requests.post(f"{BASE_URL}/v1/audio/speech", json=payload)
+    r = client.post("/audio/speech", json=payload)
     assert r.status_code == 200, f"Failed with {r.text}"
-    print(f"Custom model request successful. Audio size: {len(r.content)} bytes")
-
-if __name__ == "__main__":
-    test_markdown_cleaning_api()
-    test_custom_model_override_api()
-    print("ALL API NEW FEATURE TESTS PASSED!")
+    assert len(r.content) > 0, "Returned empty audio"

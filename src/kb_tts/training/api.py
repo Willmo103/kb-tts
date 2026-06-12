@@ -13,9 +13,26 @@ from kb_tts.training.data_generator import (
     create_dataset_job, get_job, get_all_jobs,
     list_datasets, delete_dataset, DATASETS_DIR
 )
+from kb_tts.training.trainer import (
+    start_training, stop_training, get_run,
+    list_checkpoints, trigger_onnx_export
+)
 
 # Initialize APIRouter
 router = APIRouter()
+
+# Schema models
+class TrainingRunRequest(BaseModel):
+    dataset_name: str = Field(..., description="Name of the generated dataset to train on.")
+    base_checkpoint_url: Optional[str] = Field(default=None, description="Optional URL to download a pre-trained base model checkpoint.")
+    epochs: int = Field(default=100, description="Number of training epochs.")
+    batch_size: int = Field(default=16, description="Training batch size.")
+    device: str = Field(default="cpu", description="Hardware device to use: cpu or cuda/gpu.")
+
+class ExportRunRequest(BaseModel):
+    dataset_name: str = Field(..., description="Name of the training dataset.")
+    checkpoint_rel_path: str = Field(..., description="Relative path of the checkpoint to export (e.g. lightning_logs/version_0/checkpoints/epoch=99.ckpt).")
+    model_name: str = Field(..., description="Target custom ONNX model filename.")
 
 # Schema models
 class DatasetGenerateRequest(BaseModel):
@@ -240,6 +257,63 @@ def delete_voice(model_name: str):
         raise HTTPException(status_code=404, detail="Voice model not found")
         
     return {"status": "success", "message": f"Voice model '{model_name}' and mappings deleted."}
+
+# ==================== TRAINING EXECUTION API ====================
+
+@router.post("/api/training/run")
+def trigger_training(request: TrainingRunRequest):
+    """Triggers the baremetal fine-tuning pipeline for a specific dataset."""
+    started = start_training(
+        dataset_name=request.dataset_name,
+        base_checkpoint_url=request.base_checkpoint_url,
+        epochs=request.epochs,
+        batch_size=request.batch_size,
+        device=request.device
+    )
+    if not started:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Training run for dataset '{request.dataset_name}' is already active."
+        )
+    return {"status": "success", "message": f"Training pipeline triggered for '{request.dataset_name}'."}
+
+
+@router.get("/api/training/run/status/{dataset_name}")
+def check_training_status(dataset_name: str):
+    """Retrieves status, epoch, progress and console logs for a training run."""
+    run = get_run(dataset_name)
+    if not run:
+        raise HTTPException(status_code=404, detail="No active or previous run found for this dataset.")
+    return run
+
+
+@router.post("/api/training/run/stop/{dataset_name}")
+def stop_training_run(dataset_name: str):
+    """Kills the active subprocess training execution."""
+    stopped = stop_training(dataset_name)
+    if not stopped:
+        raise HTTPException(status_code=400, detail="Run not found or already stopped.")
+    return {"status": "success", "message": "Training run termination triggered."}
+
+
+@router.get("/api/training/run/checkpoints/{dataset_name}")
+def get_dataset_checkpoints(dataset_name: str):
+    """Scans and lists generated model checkpoints (.ckpt) for a dataset."""
+    return list_checkpoints(dataset_name)
+
+
+@router.post("/api/training/run/export")
+def export_checkpoint(request: ExportRunRequest):
+    """Triggers the ONNX export process for a checkpoint in the background."""
+    triggered = trigger_onnx_export(
+        dataset_name=request.dataset_name,
+        checkpoint_rel_path=request.checkpoint_rel_path,
+        model_name=request.model_name
+    )
+    if not triggered:
+        raise HTTPException(status_code=404, detail="Checkpoint file not found.")
+    return {"status": "success", "message": f"Export triggered for model '{request.model_name}'."}
+
 
 # ==================== DASHBOARD UI ====================
 

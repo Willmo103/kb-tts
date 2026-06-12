@@ -36,7 +36,7 @@ def test_speech(voice, response_format, text, filename, speed=1.0):
     }
 
     try:
-        r = requests.post(f"{BASE_URL}/v1/audio/speech", json=payload)
+        r = requests.post(f"{BASE_URL}/audio/speech", json=payload)
         if r.status_code == 200:
             output_dir = "test_outputs"
             os.makedirs(output_dir, exist_ok=True)

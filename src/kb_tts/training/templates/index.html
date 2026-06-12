@@ -502,6 +502,9 @@
             <li class="nav-item" id="nav-deployment" onclick="switchTab('deployment')">
                 <span>Model Deployment</span>
             </li>
+            <li class="nav-item" id="nav-trainer" onclick="switchTab('trainer')">
+                <span>Training Center</span>
+            </li>
             <li class="nav-item" id="nav-playground" onclick="switchTab('playground')">
                 <span>TTS Playground</span>
             </li>
@@ -702,6 +705,102 @@
             </div>
         </div>
 
+        <!-- ==================== TABS: TRAINING CENTER ==================== -->
+        <div id="panel-trainer" class="tab-panel">
+            <h1 class="header-title">Training Center (Baremetal)</h1>
+            <p class="header-subtitle">Fine-tune a custom voice model using your generated transcription datasets.</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <!-- Setup Form -->
+                <div class="card">
+                    <h2 class="card-title">Start Training Run</h2>
+                    <form id="training-run-form" onsubmit="startTrainingRun(event)">
+                        <div class="form-group">
+                            <label class="form-label" for="train_dataset_select">Target Dataset</label>
+                            <select class="form-select" id="train_dataset_select" required>
+                                <option value="">-- Select Dataset --</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="train_checkpoint_url">Base Checkpoint URL (Optional)</label>
+                            <input class="form-input" type="url" id="train_checkpoint_url" 
+                                   value="https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/main/en/en_US/libritts/medium/epoch%3D3325-step%3D1164100.ckpt"
+                                   placeholder="HTTPS URL to .ckpt file">
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label class="form-label" for="train_epochs">Epochs</label>
+                                <input class="form-input" type="number" id="train_epochs" value="100" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="train_batch_size">Batch Size</label>
+                                <input class="form-input" type="number" id="train_batch_size" value="16" min="1">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="train_device">Device</label>
+                            <select class="form-select" id="train_device">
+                                <option value="cpu" selected>CPU (Very slow, for testing)</option>
+                                <option value="cuda">GPU / CUDA (Recommended)</option>
+                            </select>
+                        </div>
+                        
+                        <button class="btn" type="submit" id="btn-start-training">
+                            <span>Start Training</span>
+                        </button>
+                        <button class="btn btn-danger" type="button" id="btn-stop-training" style="display: none;" onclick="stopTrainingRun()">
+                            <span>Stop Training</span>
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Active Monitor -->
+                <div class="card" id="training-monitor-card" style="opacity: 0.6; pointer-events: none;">
+                    <h2 class="card-title">Training Monitor</h2>
+                    <div class="job-header">
+                        <span class="job-title" id="monitor-dataset-name">Select and start training</span>
+                        <span class="job-badge badge-failed" id="monitor-status">INACTIVE</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="monitor-progress-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="job-meta">
+                        <span id="monitor-progress-text">Progress: 0%</span>
+                        <span id="monitor-epoch-text">Epoch 0 / 0</span>
+                    </div>
+                    
+                    <div class="console-log show" id="training-console" style="max-height: 280px; margin-top: 1.5rem;">
+                        <div class="log-line">Console output will stream here when active...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Checkpoint Exporter -->
+            <div class="card" id="exporter-card" style="display: none;">
+                <h2 class="card-title">Export Trained Checkpoints to ONNX</h2>
+                <form id="export-form" onsubmit="exportCheckpoint(event)">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group">
+                            <label class="form-label" for="export_checkpoint_select">Select Checkpoint (.ckpt)</label>
+                            <select class="form-select" id="export_checkpoint_select" required>
+                                <option value="">-- No Checkpoints Found --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="export_model_name">ONNX Model Name</label>
+                            <input class="form-input" type="text" id="export_model_name" required placeholder="e.g. custom-voice">
+                        </div>
+                        <button class="btn" type="submit" id="btn-export" style="margin-bottom: 1.25rem;">
+                            <span>Export ONNX</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </div>
 
     <!-- Scripting for UI -->
@@ -720,6 +819,8 @@
                 loadModels();
             } else if (tabName === 'playground') {
                 loadPlaygroundVoices();
+            } else if (tabName === 'trainer') {
+                loadTrainerDatasets();
             }
         }
 
@@ -1104,7 +1205,7 @@
             btn.disabled = true;
             btn.innerHTML = `<span class="spinner"></span> <span>Synthesizing...</span>`;
             
-            fetch('/v1/audio/speech', {
+            fetch('/audio/speech', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -1162,6 +1263,255 @@
                     uploadInfo.style.display = 'block';
                     dropzone.style.display = 'none';
                 }
+            });
+        }
+
+        // ==================== TRAINING CENTER SECTION ====================
+        let activeTrainerPoll = null;
+        let selectedTrainerDataset = null;
+
+        function loadTrainerDatasets() {
+            const select = document.getElementById('train_dataset_select');
+            select.innerHTML = '<option value="">Loading datasets...</option>';
+            
+            fetch('/api/training/datasets')
+            .then(res => res.json())
+            .then(datasets => {
+                if (datasets.length === 0) {
+                    select.innerHTML = '<option value="">-- No Datasets Found (Go create one first) --</option>';
+                    return;
+                }
+                
+                let html = '<option value="">-- Select Dataset --</option>';
+                datasets.forEach(d => {
+                    html += `<option value="${d.name}">${d.name} (${d.num_samples} samples)</option>`;
+                });
+                select.innerHTML = html;
+                
+                select.onchange = (e) => {
+                    const val = e.target.value;
+                    if (val) {
+                        selectedTrainerDataset = val;
+                        checkActiveTraining(val);
+                        loadCheckpointsList(val);
+                    } else {
+                        selectedTrainerDataset = null;
+                        resetTrainingMonitor();
+                    }
+                };
+                
+                if (selectedTrainerDataset) {
+                    select.value = selectedTrainerDataset;
+                }
+            })
+            .catch(err => {
+                select.innerHTML = '<option value="">Failed to load datasets</option>';
+                console.error(err);
+            });
+        }
+
+        function resetTrainingMonitor() {
+            document.getElementById('training-monitor-card').style.opacity = '0.6';
+            document.getElementById('training-monitor-card').style.pointerEvents = 'none';
+            document.getElementById('monitor-dataset-name').innerText = 'Select and start training';
+            document.getElementById('monitor-status').innerText = 'INACTIVE';
+            document.getElementById('monitor-status').className = 'job-badge badge-failed';
+            document.getElementById('monitor-progress-bar').style.width = '0%';
+            document.getElementById('monitor-progress-text').innerText = 'Progress: 0%';
+            document.getElementById('monitor-epoch-text').innerText = 'Epoch 0 / 0';
+            document.getElementById('training-console').innerHTML = '<div class="log-line">Console output will stream here when active...</div>';
+            document.getElementById('btn-start-training').style.display = 'inline-flex';
+            document.getElementById('btn-stop-training').style.display = 'none';
+            document.getElementById('exporter-card').style.display = 'none';
+            
+            if (activeTrainerPoll) {
+                clearInterval(activeTrainerPoll);
+                activeTrainerPoll = null;
+            }
+        }
+
+        function startTrainingRun(e) {
+            e.preventDefault();
+            const datasetName = document.getElementById('train_dataset_select').value;
+            const baseCheckpointUrl = document.getElementById('train_checkpoint_url').value;
+            const epochs = parseInt(document.getElementById('train_epochs').value, 10);
+            const batchSize = parseInt(document.getElementById('train_batch_size').value, 10);
+            const device = document.getElementById('train_device').value;
+            
+            const btnStart = document.getElementById('btn-start-training');
+            btnStart.disabled = true;
+            btnStart.innerHTML = `<span class="spinner"></span> <span>Initializing...</span>`;
+            
+            fetch('/api/training/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    dataset_name: datasetName,
+                    base_checkpoint_url: baseCheckpointUrl || null,
+                    epochs: epochs,
+                    batch_size: batchSize,
+                    device: device
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Failed to start training') });
+                return res.json();
+            })
+            .then(data => {
+                selectedTrainerDataset = datasetName;
+                checkActiveTraining(datasetName);
+            })
+            .catch(err => {
+                alert(`Error starting training: ${err.message}`);
+            })
+            .finally(() => {
+                btnStart.disabled = false;
+                btnStart.innerHTML = `<span>Start Training</span>`;
+            });
+        }
+
+        function stopTrainingRun() {
+            if (!selectedTrainerDataset) return;
+            if (!confirm(`Are you sure you want to terminate training for "${selectedTrainerDataset}"?`)) return;
+            
+            const btnStop = document.getElementById('btn-stop-training');
+            btnStop.disabled = true;
+            btnStop.innerHTML = `<span class="spinner"></span> <span>Stopping...</span>`;
+            
+            fetch(`/api/training/run/stop/${selectedTrainerDataset}`, { method: 'POST' })
+            .then(res => {
+                if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Failed to stop training') });
+                return res.json();
+            })
+            .then(data => {
+                checkActiveTraining(selectedTrainerDataset);
+            })
+            .catch(err => {
+                alert(`Error stopping training: ${err.message}`);
+            })
+            .finally(() => {
+                btnStop.disabled = false;
+                btnStop.innerHTML = `<span>Stop Training</span>`;
+            });
+        }
+
+        function checkActiveTraining(datasetName) {
+            if (activeTrainerPoll) clearInterval(activeTrainerPoll);
+            
+            const poll = () => {
+                fetch(`/api/training/run/status/${datasetName}`)
+                .then(res => {
+                    if (res.status === 404) {
+                        resetTrainingMonitor();
+                        return;
+                    }
+                    return res.json();
+                })
+                .then(run => {
+                    if (!run) return;
+                    
+                    const monitor = document.getElementById('training-monitor-card');
+                    monitor.style.opacity = '1';
+                    monitor.style.pointerEvents = 'auto';
+                    
+                    document.getElementById('monitor-dataset-name').innerText = run.dataset_name;
+                    document.getElementById('monitor-status').innerText = run.status;
+                    document.getElementById('monitor-status').className = `job-badge badge-${run.status}`;
+                    document.getElementById('monitor-progress-bar').style.width = `${run.progress}%`;
+                    document.getElementById('monitor-progress-text').innerText = `Progress: ${run.progress}%`;
+                    document.getElementById('monitor-epoch-text').innerText = `Epoch ${run.current_epoch} / ${run.total_epochs}`;
+                    
+                    const consoleEl = document.getElementById('training-console');
+                    const isAtBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 30;
+                    
+                    consoleEl.innerHTML = run.logs.map(line => `<div class="log-line">${line}</div>`).join('') || 
+                        '<div class="log-line">Pending subprocess execution...</div>';
+                        
+                    if (isAtBottom) {
+                        consoleEl.scrollTop = consoleEl.scrollHeight;
+                    }
+                    
+                    if (['pending', 'preprocessing', 'downloading_base_model', 'training'].includes(run.status)) {
+                        document.getElementById('btn-start-training').style.display = 'none';
+                        document.getElementById('btn-stop-training').style.display = 'inline-flex';
+                    } else {
+                        document.getElementById('btn-start-training').style.display = 'inline-flex';
+                        document.getElementById('btn-stop-training').style.display = 'none';
+                        clearInterval(activeTrainerPoll);
+                        activeTrainerPoll = null;
+                    }
+                    
+                    if (['training', 'completed', 'failed', 'stopped'].includes(run.status)) {
+                        loadCheckpointsList(datasetName);
+                    }
+                })
+                .catch(err => {
+                    console.error("Error fetching run status:", err);
+                });
+            };
+            
+            poll();
+            activeTrainerPoll = setInterval(poll, 2000);
+        }
+
+        function loadCheckpointsList(datasetName) {
+            const select = document.getElementById('export_checkpoint_select');
+            
+            fetch(`/api/training/run/checkpoints/${datasetName}`)
+            .then(res => res.json())
+            .then(ckpts => {
+                const card = document.getElementById('exporter-card');
+                if (ckpts.length === 0) {
+                    card.style.display = 'none';
+                    select.innerHTML = '<option value="">-- No Checkpoints Found yet --</option>';
+                    return;
+                }
+                
+                card.style.display = 'block';
+                let html = '';
+                ckpts.forEach(c => {
+                    const sizeMb = (c.size_bytes / 1024 / 1024).toFixed(1);
+                    html += `<option value="${c.rel_path}">${c.filename} (${sizeMb} MB) - Created: ${new Date(c.created_at).toLocaleString()}</option>`;
+                });
+                select.innerHTML = html;
+            })
+            .catch(err => console.error("Failed to load checkpoints:", err));
+        }
+
+        function exportCheckpoint(e) {
+            e.preventDefault();
+            if (!selectedTrainerDataset) return;
+            
+            const checkpointRelPath = document.getElementById('export_checkpoint_select').value;
+            const modelName = document.getElementById('export_model_name').value;
+            const btn = document.getElementById('btn-export');
+            
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner"></span> <span>Exporting...</span>`;
+            
+            fetch('/api/training/run/export', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    dataset_name: selectedTrainerDataset,
+                    checkpoint_rel_path: checkpointRelPath,
+                    model_name: modelName
+                })
+            })
+            .then(res => {
+                if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Export failed') });
+                return res.json();
+            })
+            .then(data => {
+                alert(`ONNX export pipeline triggered for custom model "${modelName}". Once ready, it will automatically register in the Deployed Models view!`);
+                document.getElementById('export_model_name').value = '';
+            })
+            .catch(err => {
+                alert(`Export failed: ${err.message}`);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = `<span>Export ONNX</span>`;
             });
         }
 
